@@ -20,6 +20,7 @@ from openadapt.strategies.mixins.huggingface import (
 
 from openadapt.strategies.mixins.ocr import OCRReplayStrategyMixin
 from openadapt.strategies.mixins.ascii import ASCIIReplayStrategyMixin
+from openadapt.strategies.mixins.gpt4all import GPT4ALLReplayStrategyMixin
 from openadapt.strategies.mixins.sam import SAMReplayStrategyMixin
 from openadapt.strategies.mixins.summary import SummaryReplayStrategyMixin
 
@@ -28,6 +29,7 @@ class DemoReplayStrategy(
     HuggingFaceReplayStrategyMixin,
     OCRReplayStrategyMixin,
     ASCIIReplayStrategyMixin,
+    GPT4ALLReplayStrategyMixin,
     SAMReplayStrategyMixin,
     SummaryReplayStrategyMixin,
     BaseReplayStrategy,
