@@ -30,6 +30,22 @@ _DEFAULTS = {
     "RECORD_READ_ACTIVE_ELEMENT_STATE": False,
     # TODO: remove?
     "REPLAY_STRIP_ELEMENT_STATE": True,
+    "USE_MODAL": True,
+    "RWKV_PARAMETERS": {
+        "temperature": 0.6, 
+        "top_p": 1.0, 
+        "count_penalty": 0.4, 
+        "presence_penalty": 0.4,
+        "token_count": 200, 
+        "ctx_limit": 1536},
+    # model 0: RWKV-4-Raven-14B  <-- Largest model, finetuned version of model 3
+    # model 1: RWKV-4-Raven-7B
+    # model 2: RWKV-4-Raven-1B5  <-- smallest model
+    # model 3: RWKV-4-Pile-14B
+    # model 4: RWKV-4-World-7B
+    # model 5: RWKV-4-World-1.5B
+    "RWKV_MODEL": 0,
+    
     # IGNORES WARNINGS (PICKLING, ETC.)
     # TODO: ignore warnings by default on GUI
     "IGNORE_WARNINGS": False,
