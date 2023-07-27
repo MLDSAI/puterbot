@@ -15,8 +15,10 @@ from openadapt.strategies.mixins.huggingface import (
     MAX_INPUT_SIZE,
     HuggingFaceReplayStrategyMixin,
 )
+from openadapt.strategies.mixins.ascii import ASCIIReplayStrategyMixin
 from openadapt.strategies.mixins.ocr import OCRReplayStrategyMixin
 from openadapt.strategies.mixins.sam import SAMReplayStrategyMixin
+from openadapt.strategies.mixins.svg import SVGReplayStrategyMixin
 from openadapt.strategies.mixins.summary import SummaryReplayStrategyMixin
 
 
@@ -24,6 +26,7 @@ class DemoReplayStrategy(
     HuggingFaceReplayStrategyMixin,
     OCRReplayStrategyMixin,
     ASCIIReplayStrategyMixin,
+    SVGReplayStrategyMixin,
     SAMReplayStrategyMixin,
     SummaryReplayStrategyMixin,
     BaseReplayStrategy,
@@ -76,6 +79,7 @@ class DemoReplayStrategy(
         )
         event_strs = [f"<{event}>" for event in self.recording.action_events]
         history_strs = [f"<{completion}>" for completion in self.result_history]
+
         prompt = " ".join(event_strs + history_strs)
         N = max(0, len(prompt) - MAX_INPUT_SIZE)
         prompt = prompt[N:]
