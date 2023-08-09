@@ -5,8 +5,8 @@
 __pycache__
 cache
 *.egg-info
-*~
 .venv
+*~
 
 # Vim
 *.sw[m-p]

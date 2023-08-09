@@ -38,6 +38,11 @@ def replay(strategy_name: str, timestamp: Union[str, None] = None) -> None:
     logger.debug(f"{recording=}")
     assert recording, "No recording found"
 
+    file_signals = crud.get_file_signals(recording)
+    logger.info(f"{len(file_signals)} file signals found")
+    for file_signal in file_signals:
+        print(file_signal)
+
     logger.info(f"{strategy_name=}")
 
     strategy_class_by_name = utils.get_strategy_class_by_name()
@@ -55,6 +60,8 @@ def replay(strategy_name: str, timestamp: Union[str, None] = None) -> None:
 
     strategy = strategy_class(recording)
     logger.info(f"{strategy=}")
+
+    # If signals were found in the recording, initialize them as defaults during the replay
 
     strategy.run()
 

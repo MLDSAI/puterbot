@@ -79,6 +79,7 @@ flake8-annotations = "^3.0.1"
 pre-commit = "^3.3.3"
 pympler = "^1.0.1"
 psutil = "^5.9.5"
+openpyxl = "^3.1.2"
 pyobjc-framework-avfoundation = {version = "^9.2", markers = "sys_platform == 'darwin'"}
 fastapi = "0.98.0"
 oa-pynput = "^1.7.7"
