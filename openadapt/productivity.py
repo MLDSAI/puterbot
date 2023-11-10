@@ -181,6 +181,7 @@ def find_num_tasks(
         task (Optional[ActionEvent]):
         An optional task identified by the search algorithm.
 
+
     Returns:
         list[ActionEvent]: The final verified task.
         int: The number of repetitions.
