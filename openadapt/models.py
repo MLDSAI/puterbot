@@ -400,3 +400,22 @@ class MemoryStat(db.Base):
     recording_timestamp = sa.Column(sa.Integer)
     memory_usage_bytes = sa.Column(ForceFloat)
     timestamp = sa.Column(ForceFloat)
+
+
+class Dataset(db.Base):
+    """Class representing a dataset of screenshots and window states in the database."""
+
+    __tablename__ = "dataset"
+
+    id = sa.Column(sa.Integer, primary_key=True)
+
+
+class DatasetEntry(db.Base):
+    """Class representing a dataset entry associated with a Dataset in the database."""
+
+    __tablename__ = "dataset_entry"
+
+    id = sa.Column(sa.Integer, primary_key=True)
+    dataset_id = sa.Column(sa.Integer)
+    window_event_timestamp = sa.Column(ForceFloat)
+    screenshot_timestamp = sa.Column(ForceFloat)
