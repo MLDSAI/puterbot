@@ -2,21 +2,31 @@
 
 # OpenAdapt: AI-First Process Automation with Transformers
 
-### Enormous volumes of mental labor are wasted on repetitive GUI workflows.
+This will open your browser. It will look something like this:
 
-### Foundation Models (e.g. [GPT-4](https://openai.com/research/gpt-4), [ACT-1](https://www.adept.ai/blog/act-1)) are powerful automation tools.
+![image](https://github.com/OpenAdaptAI/OpenAdapt/assets/774615/5d7253b7-ae12-477c-94a3-b388e4f37587)
 
-### OpenAdapt connects Foundation Models to GUIs:
+## Playback
+
+You can play back the recording using the following command:
+
+```python
+python -m openadapt.replay NaiveReplayStrategy
+```
+
+## Other Replay Strategies
+
+- [`StatefulReplayStrategy`](https://github.com/OpenAdaptAI/OpenAdapt/blob/main/openadapt/strategies/stateful.py): Proof-of-concept which uses the OpenAI GPT-4 API with prompts constructed via OS-level window data.
+
+## OpenAdapt connects Foundation Models to GUIs
 
 <img width="1473" alt="image" src="https://github.com/OpenAdaptAI/OpenAdapt/assets/774615/5a760e4a-c596-4604-b1a4-a9563dce0fe7">
 
-
-([Slides](https://t.ly/7RGr))
+[Slides](https://t.ly/7RGr)
 
 Welcome to OpenAdapt! This Python library implements AI-First Process Automation
 with the power of Transformers by:
 
-- Recording screenshots and associated user input
 - Aggregating and visualizing user input and recordings for development
 - Converting screenshots and user input into tokenized format
 - Generating synthetic input via transformer model completions
@@ -33,50 +43,70 @@ The direction is adjacent to [Adept.ai](https://adept.ai/), with some key differ
 4. OpenAdapt is open source (MIT license)
 
 
-## Install
-
-<br/>
+## Installation
 
 |                 Installation Method                 |   Recommended for   |                                Ease of Use                                 |
 |:---------------------------------------------------:|:-------------------:|:--------------------------------------------------------------------------:|
 | [Scripted](https://openadapt.ai/#start) | Non-technical users | Streamlines the installation process for users unfamiliar with setup steps |
 |                    [Manual](https://github.com/OpenAdaptAI/OpenAdapt#manual-setup)                     |   Technical Users   | Allows for more control and customization during the installation process  |
 
-<br/>
+## Installation Scripts
 
-### Installation Scripts
-
-#### Windows
+### Windows
 - Press Windows Key, type "powershell", and press Enter
 - Copy and paste the following command into the terminal, and press Enter (If Prompted for `User Account Control`, click 'Yes'):
-  <pre className="whitespace-pre-wrap code text-slate-600 bg-slate-100 p-3 m-2">
+  ```powershell
    Start-Process powershell -Verb RunAs -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', "iwr -UseBasicParsing -Uri 'https://raw.githubusercontent.com/OpenAdaptAI/OpenAdapt/main/install/install_openadapt.ps1' | Invoke-Expression"
-  </pre>
+  ```
 
 #### MacOS
 - Download and install Git and Python 3.10
 - Press Command+Space, type "terminal", and press Enter
 - Copy and paste the following command into the terminal, and press Enter:
-  <pre className="whitespace-pre-wrap code text-slate-600 bg-slate-100 p-3 m-2">
+  ```bash
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/OpenAdaptAI/OpenAdapt/HEAD/install/install_openadapt.sh)"
-  </pre>
+  ```
 
-<br/>
-<br/>
+### MacOS
+- Download and install Git and Python 3.10
+- Press Command+Space, type "terminal", and press Enter
+- Copy and paste the following command into the terminal, and press Enter:
+  ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/OpenAdaptAI/OpenAdapt/HEAD/install/install_openadapt.sh)"
+  ```
 
-### Manual Setup
+## Manual Setup
 
-Prerequisite:
+Prerequisites:
 - Python 3.10
 - Git
 - Tesseract (for OCR)
 
 For the setup of any/all of the above dependencies, follow the steps [SETUP.md](./SETUP.md).
 
-<br/>
+## Managing Python Versions with Pyenv
 
-Install with [Poetry](https://python-poetry.org/) :
-```
+If you do not have the required Python version installed, you can use `pyenv` to manage Python versions. `pyenv` is a tool that allows you to switch between multiple versions of Python. You can find more detailed information or install `pyenv` from its [GitHub repository](https://github.com/pyenv/pyenv).
+
+Here are the steps to use `pyenv` to install the required Python version and set it as the local version for the OpenAdapt project:
+
+1. Install a specific Python version with `pyenv`:
+   ```bash
+   pyenv install 3.10.0
+   ```
+2. Set the local Python version for the project:
+   ```bash
+   pyenv local 3.10.0
+   ```
+3. Verify the Python version:
+   ```bash
+   python --version
+   ```
+
+After setting the local Python version with `pyenv`, you can proceed with the "Manual Setup" instructions as usual.
+
+## Install with Poetry
+```bash
 git clone https://github.com/OpenAdaptAI/OpenAdapt.git
 cd OpenAdapt
 pip3 install poetry
@@ -86,23 +116,34 @@ alembic upgrade head
 pytest
 ```
 
+If it's not clear what `ActionEvent` is appropriate for the given `Screenshot`,
+(e.g. if the GUI application is behaving in a way we haven't seen before),
+we can ask the user to take over temporarily to demonstrate the appropriate
+course of action.
 
-## Permissions
+## Data Model
 
-See how to set up system permissions on macOS [here](./permissions_in_macOS.md).
+The data model consists of the following entities:
+
+1. `Recording`: Contains information about the screen dimensions, platform, and
+   other metadata.
+2. `ActionEvent`: Represents a user action event such as a mouse click or key
+   press. Each `ActionEvent` has an associated `Screenshot` taken immediately
+   before the event occurred. `ActionEvent`s are aggregated to remove
+   unnecessary events (see [Visualize](#visualize).)
 
 ## Run
 
-### Record
+## Record
 
 Create a new recording by running the following command:
 
-```
+```python
 python -m openadapt.record "testing out openadapt"
 ```
 
 Wait until all three event writers have started:
-```
+```bash
 | INFO     | __mp_main__:write_events:230 - event_type='screen' starting
 | INFO     | __mp_main__:write_events:230 - event_type='action' starting
 | INFO     | __mp_main__:write_events:230 - event_type='window' starting
@@ -120,37 +161,23 @@ possible memory leak
 pointing the cursor and left or right clicking, as described in this
 [open issue](https://github.com/OpenAdaptAI/OpenAdapt/issues/145)
 
-
-### Visualize
+## Visualize
 
 Visualize the latest recording you created by running the following command:
-
-```
-python -m openadapt.visualize
-```
-
-This will open your browser. It will look something like this:
-
-![image](https://github.com/OpenAdaptAI/OpenAdapt/assets/774615/5d7253b7-ae12-477c-94a3-b388e4f37587)
-
-### Playback
-
-You can play back the recording using the following command:
-
-```
-python -m openadapt.replay NaiveReplayStrategy
+```bash
+git clone https://github.com/OpenAdaptAI/OpenAdapt.git
+cd OpenAdapt
+pip3 install poetry
+poetry install
+poetry shell
+alembic upgrade head
+pytest
 ```
 
-Other replay strategies include:
-
-- [`StatefulReplayStrategy`](https://github.com/OpenAdaptAI/OpenAdapt/blob/main/openadapt/strategies/stateful.py): Proof-of-concept which uses the OpenAI GPT-4 API with prompts constructed via OS-level window data.
-
-See https://github.com/OpenAdaptAI/OpenAdapt/tree/main/openadapt/strategies for a complete list. More ReplayStrategies coming soon! (see [Contributing](#Contributing)).
-
-
-## Contributing
-
-### Problem Statement
+If it's not clear what `ActionEvent` is appropriate for the given `Screenshot`,
+(e.g. if the GUI application is behaving in a way we haven't seen before),
+we can ask the user to take over temporarily to demonstrate the appropriate
+course of action.
 
 Our goal is to automate the task described and demonstrated in a `Recording`.
 That is, given a new `Screenshot`, we want to generate the appropriate
@@ -173,7 +200,7 @@ The data model consists of the following entities:
 2. `ActionEvent`: Represents a user action event such as a mouse click or key
    press. Each `ActionEvent` has an associated `Screenshot` taken immediately
    before the event occurred. `ActionEvent`s are aggregated to remove
-   unnecessary events (see [visualize](#visualize).)
+   unnecessary events (see [Visualize](#visualize).)
 3. `Screenshot`: Contains the PNG data of a screenshot taken during the
    recording.
 4. `WindowEvent`: Represents a window event such as a change in window title,
@@ -195,7 +222,7 @@ See [GitBook Documentation](https://openadapt.gitbook.io/openadapt.ai/) for more
 [Join us on Discord](https://discord.gg/yF527cQbDG). Then:
 
 1. Fork this repository and clone it to your local machine.
-2. Get OpenAdapt up and running by following the instructions under [Setup](#Setup).
+2. Get OpenAdapt up and running by following the instructions under [Setup](#setup).
 3. Look through the list of open issues at https://github.com/OpenAdaptAI/OpenAdapt/issues
 and once you find one you would like to address, indicate your interest with a comment.
 4. Implement a solution to the issue you selected. Write unit tests for your
@@ -255,10 +282,20 @@ In summary (from https://stackoverflow.com/a/69673312):
 5. Navigate to /System/Applications/Utilities/ (or wherever Terminal.app is installed)
 6. Click okay.
 
-## Developing
+### Windows
+- Press Windows Key, type "powershell", and press Enter
+- Copy and paste the following command into the terminal, and press Enter (If Prompted for `User Account Control`, click 'Yes'):
+  ```powershell
+   Start-Process powershell -Verb RunAs -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', "iwr -UseBasicParsing -Uri 'https://raw.githubusercontent.com/OpenAdaptAI/OpenAdapt/main/install/install_openadapt.ps1' | Invoke-Expression"
+  ```
 
-### Generate migration (after editing a model)
-
+### MacOS
+- Download and install Git and Python 3.10
+- Press Command+Space, type "terminal", and press Enter
+- Copy and paste the following command into the terminal, and press Enter:
+  ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/OpenAdaptAI/OpenAdapt/HEAD/install/install_openadapt.sh)"
+  ```
 ```
 alembic revision --autogenerate -m "<msg>"
 ```
