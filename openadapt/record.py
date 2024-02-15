@@ -31,6 +31,7 @@ from openadapt import config, utils, window
 from openadapt.db import crud
 from openadapt.extensions import synchronized_queue as sq
 from openadapt.models import ActionEvent
+from openadapt.trace import trace
 
 Event = namedtuple("Event", ("timestamp", "type", "data"))
 
@@ -75,62 +76,6 @@ def log_memory_usage() -> None:
     trace_str = "\n".join(list(tracker.format_diff()))
     logger.info(f"trace_str=\n{trace_str}")
 
-
-def args_to_str(*args: tuple) -> str:
-    """Convert positional arguments to a string representation.
-
-    Args:
-        *args: Positional arguments.
-
-    Returns:
-        str: Comma-separated string representation of positional arguments.
-    """
-    return ", ".join(map(str, args))
-
-
-def kwargs_to_str(**kwargs: dict[str, Any]) -> str:
-    """Convert keyword arguments to a string representation.
-
-    Args:
-        **kwargs: Keyword arguments.
-
-    Returns:
-        str: Comma-separated string representation of keyword arguments
-          in form "key=value".
-    """
-    return ",".join([f"{k}={v}" for k, v in kwargs.items()])
-
-
-def trace(logger: logger) -> Any:
-    """Decorator that logs the function entry and exit using the provided logger.
-
-    Args:
-        logger: The logger object to use for logging.
-
-    Returns:
-        A decorator that can be used to wrap functions and log their entry and exit.
-    """
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper_logging(*args: tuple[tuple, ...], **kwargs: dict[str, Any]) -> Any:
-            func_name = func.__qualname__
-            func_args = args_to_str(*args)
-            func_kwargs = kwargs_to_str(**kwargs)
-
-            if func_kwargs != "":
-                logger.info(f" -> Enter: {func_name}({func_args}, {func_kwargs})")
-            else:
-                logger.info(f" -> Enter: {func_name}({func_args})")
-
-            result = func(*args, **kwargs)
-
-            logger.info(f" <- Leave: {func_name}({result})")
-            return result
-
-        return wrapper_logging
-
-    return decorator
 
 
 def process_event(
