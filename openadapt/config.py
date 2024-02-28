@@ -99,6 +99,7 @@ _DEFAULTS = {
         "key_vk",
         "children",
     ],
+    "TEMPLATES_DIR_NAME": "openadapt/templates",
     "PLOT_PERFORMANCE": True,
     # VISUALIZATION CONFIGURATIONS
     "VISUALIZE_DARK_MODE": False,
@@ -207,6 +208,7 @@ else:
     DB_FPATH = RECORDING_DIRECTORY_PATH / DB_FNAME  # noqa
 DB_URL = f"sqlite:///{DB_FPATH}"
 DIRNAME_PERFORMANCE_PLOTS = "performance"
+TEMPLATES_DIRPATH = str((ROOT_DIRPATH / _DEFAULTS["TEMPLATES_DIR_NAME"]).resolve())
 
 
 def set_db_url(db_fname: str) -> None:

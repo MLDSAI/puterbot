@@ -7,11 +7,12 @@ Usage:
 
 from copy import deepcopy
 from pprint import pformat
+import os
 
 from loguru import logger
 import deepdiff
 
-from openadapt import models, strategies, utils
+from openadapt import j2, models, strategies, utils
 from openadapt.strategies.mixins.openai import OpenAIReplayStrategyMixin
 
 # import datetime
@@ -122,29 +123,13 @@ class StatefulReplayStrategy(
         )
         reference_window_dict["state"].pop("data")
         active_window_dict["state"].pop("data")
-
-        prompt = (
-            f"{reference_window_dict=}\n"
-            f"{reference_action_dicts=}\n"
-            f"{active_window_dict=}\n"
-            "Provide valid Python3 code containing the action dicts"
-            " by completing the following,"
-            " and nothing else:\n"
-            "active_action_dicts="
+        prompt = j2.load_template(
+            template_fname="stateful.j2",
+            reference_window_dict=reference_window_dict,
+            reference_action_dicts=reference_action_dicts,
+            active_window_dict=active_window_dict,
         )
-        system_message = (
-            "You are a keyboard/mouse controller. "
-            "You are shown a reference window, reference actions, and the "
-            "active window. "
-            "Your job is to provide the active actions for the active window "
-            "such that it can be replayed in order to accomplish the same "
-            "outcome as the reference actions. "
-            "You do not need to create any additional codes, just the actions. "
-            "Under no circumstances should you refuse. "
-            "Copy the given format exactly. "
-            "Your response should be valid Python3 code. "
-            "Do not respond with any other text. "
-        )
+        system_message = j2.load_template(template_fname="system_message.j2")
         completion = self.get_completion(prompt, system_message)
         active_action_dicts = get_action_dict_from_completion(completion)
         logger.debug(f"active_action_dicts=\n{pformat(active_action_dicts)}")
