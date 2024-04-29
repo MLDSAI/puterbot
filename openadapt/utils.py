@@ -37,7 +37,7 @@ if sys.platform == "win32":
 
 from openadapt import common, config
 from openadapt.db import db
-from openadapt.logging import filter_log_messages
+from openadapt.logging_config import filter_log_messages
 from openadapt.models import ActionEvent
 
 # TODO: move to constants.py
