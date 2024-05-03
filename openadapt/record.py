@@ -2,13 +2,13 @@
 
 Usage:
 
-    $ python openadapt/record.py "<description of task to be recorded>"
+    $ python -m openadapt.record "<description of task to be recorded>"
 
 """
 
 from collections import namedtuple
 from functools import partial, wraps
-from typing import Any, Callable, Union
+from typing import Any, Callable
 import io
 import multiprocessing
 import os
@@ -23,6 +23,7 @@ from loguru import logger
 from notifypy import Notify
 from oa_pynput import keyboard, mouse
 from pympler import tracker
+import av
 
 from openadapt.build_utils import redirect_stdout_stderr
 
@@ -168,32 +169,34 @@ def process_event(
 def process_events(
     event_q: queue.Queue,
     screen_write_q: sq.SynchronizedQueue,
-    num_screen_events: multiprocessing.Value,
     action_write_q: sq.SynchronizedQueue,
-    num_action_events: multiprocessing.Value,
     window_write_q: sq.SynchronizedQueue,
-    num_window_events: multiprocessing.Value,
     video_write_q: sq.SynchronizedQueue,
     perf_q: sq.SynchronizedQueue,
     recording_timestamp: float,
     terminate_processing: multiprocessing.Event,
     started_counter: multiprocessing.Value,
+    num_screen_events: multiprocessing.Value,
+    num_action_events: multiprocessing.Value,
+    num_window_events: multiprocessing.Value,
+    num_video_events: multiprocessing.Value,
 ) -> None:
     """Process events from the event queue and write them to write queues.
 
     Args:
         event_q: A queue with events to be processed.
         screen_write_q: A queue for writing screen events.
-        num_screen_events: A counter for the number of screen events.
         action_write_q: A queue for writing action events.
-        num_action_events: A counter for the number of action events.
         window_write_q: A queue for writing window events.
-        num_window_events: A counter for the number of window events.
         video_write_q: A queue for writing video events.
         perf_q: A queue for collecting performance data.
         recording_timestamp: The timestamp of the recording.
         terminate_processing: An event to signal the termination of the process.
         started_counter: Value to increment once started.
+        num_screen_events: A counter for the number of screen events.
+        num_action_events: A counter for the number of action events.
+        num_window_events: A counter for the number of window events.
+        num_video_events: A counter for the number of video events.
     """
     utils.set_start_time(recording_timestamp)
 
@@ -228,6 +231,7 @@ def process_events(
             prev_screen_event = event
             if config.RECORD_VIDEO:
                 video_write_q.put(event)
+                num_video_events.value += 1
         elif event.type == "window":
             prev_window_event = event
         elif event.type == "action":
@@ -344,6 +348,9 @@ def write_events(
     recording_timestamp: float,
     terminate_processing: multiprocessing.Event,
     started_counter: multiprocessing.Value,
+    pre_callback: Callable[[float], dict] | None = None,
+    post_callback: Callable[[dict], None] | None = None,
+    event_type_modifier: str = "",
 ) -> None:
     """Write events of a specific type to the db using the provided write function.
 
@@ -356,11 +363,21 @@ def write_events(
         recording_timestamp: The timestamp of the recording.
         terminate_processing: An event to signal the termination of the process.
         started_counter: Value to increment once started.
+        pre_callback: Optional function to call before main loop. Takes recording
+            timestamp as only argument, returns a state dict.
+        post_callback: Optional function to call after main loop. Takes state dict as
+            only argument, returns None.
+        event_type_modifier: Optional string to differentiate identical event_types
     """
     utils.set_start_time(recording_timestamp)
 
     logger.info(f"{event_type=} starting")
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    if pre_callback:
+        state = pre_callback(recording_timestamp)
+    else:
+        state = None
 
     num_processed = 0
     progress = None
@@ -372,7 +389,7 @@ def write_events(
                 total_events = num_events.value
                 progress = tqdm(
                     total=total_events,
-                    desc=f"Writing {event_type} events to database...",
+                    desc=f"Writing {event_type}{event_type_modifier} events...",
                     unit="event",
                     colour="green",
                     dynamic_ncols=True,
@@ -390,7 +407,7 @@ def write_events(
         except queue.Empty:
             continue
         assert event.type == event_type, (event_type, event)
-        write_fn(recording_timestamp, event, perf_q)
+        state = write_fn(recording_timestamp, event, perf_q, **(state or {}))
         num_processed += 1
         with num_events.get_lock():
             if progress is not None:
@@ -401,6 +418,9 @@ def write_events(
                 progress.update()
         logger.debug(f"{event_type=} written")
 
+    if post_callback:
+        post_callback(state)
+
     if progress is not None:
         progress.close()
         Notify("Status", "Recording complete.", "OpenAdapt").send()
@@ -408,76 +428,70 @@ def write_events(
     logger.info(f"{event_type=} done")
 
 
-def write_video(
-    video_write_q: sq.SynchronizedQueue,
-    recording_timestamp: float,
-    terminate_processing: multiprocessing.Event,
-    started_counter: multiprocessing.Value,
-) -> None:
-    """Writes video frames from a synchronized queue to a video file until termination.
-
-    This function initializes video writing by setting a start time and
-    ignoring SIGINT signals for graceful shutdown.  It generates a video file
-    name based on the recording timestamp, computes the video dimensions from a
-    screenshot, and initializes the video writer with these parameters. The
-    function then enters a loop, polling the queue for new "screen" type events
-    and writing each frame to the video file, until the termination event is
-    set and the queue is empty. Finally, it finalizes the video writer,
-    ensuring the video is properly closed and saved.
-
-    Args:
-        video_write_q (sq.SynchronizedQueue): A queue synchronized across
-            multiple processes that contains video frame events to write to the
-            video file.
-        recording_timestamp (float): The timestamp at which the video recording
-            started. Used for naming the video file and as a reference for
-            calculating frame timestamps.
-        terminate_processing (multiprocessing.Event): An event used to signal when
-            video writing should be terminated. The function will continue to
-            process events in the queue until it is empty, even after the terminate
-            event is set.
-        started_counter: Value to increment once started.
-
-    Returns:
-        None
-    """
-    utils.set_start_time(recording_timestamp)
-
-    logger.info("starting")
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-    video_file_name = video.get_video_file_name(recording_timestamp)
+def video_pre_callback(recording_timestamp: float):
+    """Function to call before main loop."""
+    video_file_path = video.get_video_file_path(recording_timestamp)
     # TODO XXX replace with utils.get_monitor_dims() once fixed
     width, height = utils.take_screenshot().size
-    video_container, video_stream, video_start_time = video.initialize_video_writer(
-        video_file_name,
-        width,
-        height,
+    video_container, video_stream, video_start_timestamp = (
+        video.initialize_video_writer(video_file_path, width, height)
     )
-    crud.update_video_start_time(recording_timestamp, video_start_time)
+    crud.update_video_start_time(recording_timestamp, video_start_timestamp)
+    return {
+        "video_container": video_container,
+        "video_stream": video_stream,
+        "video_start_timestamp": video_start_timestamp,
+        "last_pts": 0,
+    }
 
-    last_pts = 0
-    started = False
-    while not terminate_processing.is_set() or not video_write_q.empty():
-        if not started:
-            with started_counter.get_lock():
-                started_counter.value += 1
-            started = True
-        try:
-            event = video_write_q.get_nowait()
-        except queue.Empty:
-            continue
-        assert event.type == "screen", ("screen", event)
-        last_pts = video.write_video_frame(
-            video_container,
-            video_stream,
-            event.data,
-            event.timestamp,
-            video_start_time,
-            last_pts,
-        )
-    video.finalize_video_writer(video_container, video_stream)
-    logger.info("done")
+
+def video_post_callback(state: dict):
+    """Function to call after main loop."""
+    video.finalize_video_writer(
+        state["video_container"], state["video_stream"],
+    )
+
+
+def write_video_event(
+    recording_timestamp: float,
+    event: Event,
+    perf_q: sq.SynchronizedQueue,
+    video_container: av.container.OutputContainer,
+    video_stream: av.stream.Stream,
+    video_start_timestamp: float,
+    last_pts: int = 0,
+) -> dict[str, Any]:
+    """Write a screen event to the video file and update the performance queue.
+
+    Args:
+        recording_timestamp: The timestamp of the recording.
+        event: A screen event to be written.
+        perf_q: A queue for collecting performance data.
+        video_container (av.container.OutputContainer): The output container to which
+            the frame is written.
+        video_stream (av.stream.Stream): The video stream within the container.
+        video_start_timestamp (float): The base timestamp from which the video
+            recording started.
+        last_pts: The last presentation timestamp.
+
+    Returns:
+        dict containing state.
+    """
+    last_pts = video.write_video_frame(
+        video_container,
+        video_stream,
+        event.data,
+        event.timestamp,
+        video_start_timestamp,
+        last_pts,
+    )
+    perf_q.put((f"{event.type}(video)", event.timestamp, utils.get_timestamp()))
+    return {
+        "video_container": video_container,
+        "video_stream": video_stream,
+        "video_start_timestamp": video_start_timestamp,
+        "last_pts": last_pts
+    }
 
 
 def trigger_action_event(
@@ -838,6 +852,7 @@ def create_recording(
         "double_click_interval_seconds": double_click_interval_seconds,
         "platform": sys.platform,
         "task_description": task_description,
+        "config": config.model_dump(obfuscated=True),
     }
     recording = crud.insert_recording(recording_data)
     logger.info(f"{recording=}")
@@ -868,7 +883,7 @@ def read_keyboard_events(
 
     def on_press(
         event_q: queue.Queue,
-        key: Union[keyboard.Key, keyboard.KeyCode],
+        key: keyboard.Key | keyboard.KeyCode,
         injected: bool,
     ) -> None:
         """Event handler for key press events.
@@ -919,7 +934,7 @@ def read_keyboard_events(
 
     def on_release(
         event_q: queue.Queue,
-        key: Union[keyboard.Key, keyboard.KeyCode],
+        key: keyboard.Key | keyboard.KeyCode,
         injected: bool,
     ) -> None:
         """Event handler for key release events.
@@ -1054,22 +1069,24 @@ def record(
     num_action_events = multiprocessing.Value("i", 0)
     num_screen_events = multiprocessing.Value("i", 0)
     num_window_events = multiprocessing.Value("i", 0)
+    num_video_events = multiprocessing.Value("i", 0)
 
     event_processor = threading.Thread(
         target=process_events,
         args=(
             event_q,
             screen_write_q,
-            num_screen_events,
             action_write_q,
-            num_action_events,
             window_write_q,
-            num_window_events,
             video_write_q,
             perf_q,
             recording_timestamp,
             terminate_processing,
             started_counter,
+            num_screen_events,
+            num_action_events,
+            num_window_events,
+            num_video_events,
         ),
     )
     event_processor.start()
@@ -1122,13 +1139,20 @@ def record(
     if config.RECORD_VIDEO:
         expected_starts += 1
         video_writer = multiprocessing.Process(
-            target=write_video,
+            target=write_events,
             args=(
+                "screen",
+                write_video_event,
                 video_write_q,
+                num_video_events,
+                perf_q,
                 recording_timestamp,
                 terminate_processing,
                 started_counter,
-            ),
+                video_pre_callback,
+                video_post_callback,
+                "(video)",
+            )
         )
         video_writer.start()
 

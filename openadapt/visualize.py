@@ -215,6 +215,14 @@ def main(
     logger.info(f"{recording=}")
     logger.info(f"{diff_video=}")
 
+    if diff_video:
+        assert recording.config["RECORD_VIDEO"], (
+            "Can't diff video against images because video was not saved."
+        )
+        assert recording.config["RECORD_IMAGES"], (
+            "Can't diff video against images because images were not saved."
+        )
+
     meta = {}
     action_events = get_events(recording, process=PROCESS_EVENTS, meta=meta)
     event_dicts = rows2dicts(action_events)
@@ -248,12 +256,12 @@ def main(
     logger.info(f"{len(action_events)=}")
 
     if diff_video:
-        video_file_name = video.get_video_file_name(recording.timestamp)
+        video_file_path = video.get_video_file_path(recording.timestamp)
         timestamps = [
             action_event.screenshot.timestamp - recording.video_start_time
             for action_event in action_events
         ]
-        frames = video.extract_frames(video_file_name, timestamps)
+        frames = video.extract_frames(video_file_path, timestamps)
 
     num_events = (
         min(MAX_EVENTS, len(action_events))
