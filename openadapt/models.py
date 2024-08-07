@@ -183,6 +183,26 @@ class ActionEvent(db.Base):
         for key, value in properties.items():
             setattr(self, key, value)
 
+    def to_log_dict(self) -> dict[str, Any]:
+        """Convert the action event to a log dictionary."""
+        return {
+            "name": self.name,
+            "timestamp": self.timestamp,
+            "mouse_x": self.mouse_x,
+            "mouse_y": self.mouse_y,
+            "mouse_dx": self.mouse_dx,
+            "mouse_dy": self.mouse_dy,
+            "mouse_button_name": self.mouse_button_name,
+            "mouse_pressed": self.mouse_pressed,
+            "key_name": self.key_name,
+            "key_char": self.key_char,
+            "key_vk": self.key_vk,
+            "canonical_key_name": self.canonical_key_name,
+            "canonical_key_char": self.canonical_key_char,
+            "canonical_key_vk": self.canonical_key_vk,
+            "element_state": self.element_state,
+        }
+
     @property
     def available_segment_descriptions(self) -> list[str]:
         """Gets the available segment descriptions."""
@@ -971,6 +991,24 @@ class Replay(db.Base):
     strategy_name = sa.Column(sa.String)
     strategy_args = sa.Column(sa.JSON)
     git_hash = sa.Column(sa.String)
+    logs = sa.orm.relationship("ReplayLog", back_populates="replay")
+
+
+class ReplayLog(db.Base):
+    """Class representing a replay log in the database."""
+
+    __tablename__ = "replay_log"
+
+    id = sa.Column(sa.Integer, primary_key=True)
+    replay_id = sa.Column(sa.ForeignKey("replay.id"))
+    replay = sa.orm.relationship("Replay", back_populates="logs")
+    lineno = sa.Column(sa.Integer)
+    filename = sa.Column(sa.String)
+    git_hash = sa.Column(sa.String)
+    timestamp = sa.Column(ForceFloat)
+    log_level = sa.Column(sa.String)
+    key = sa.Column(sa.String)
+    data = sa.Column(sa.LargeBinary)
 
 
 def copy_sa_instance(sa_instance: db.Base, **kwargs: dict) -> db.Base:

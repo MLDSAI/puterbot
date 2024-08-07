@@ -9,6 +9,7 @@ import numpy as np
 
 from openadapt import adapters, models, playback, utils
 from openadapt.custom_logger import logger
+from openadapt.db import crud
 
 CHECK_ACTION_COMPLETE = True
 MAX_FRAME_TIMES = 1000
@@ -50,12 +51,26 @@ class BaseReplayStrategy(ABC):
         """
         pass
 
+    def attach_replay_id(self, replay_id: int) -> None:
+        """Attach the replay ID to the strategy.
+
+        Args:
+            replay_id (int): The replay ID.
+        """
+        self._replay_id = replay_id
+
     def run(self) -> None:
         """Run the replay strategy."""
         keyboard_controller = keyboard.Controller()
         mouse_controller = mouse.Controller()
         while True:
             screenshot = models.Screenshot.take_screenshot()
+            crud.add_replay_log(
+                replay_id=self._replay_id,
+                log_level="INFO",
+                key="screenshot",
+                data=screenshot.image,
+            )
 
             # check if previous action is complete
             if CHECK_ACTION_COMPLETE:
@@ -68,11 +83,23 @@ class BaseReplayStrategy(ABC):
 
             self.screenshots.append(screenshot)
             window_event = models.WindowEvent.get_active_window_event()
+            crud.add_replay_log(
+                replay_id=self._replay_id,
+                log_level="INFO",
+                key="window_event",
+                data=window_event,
+            )
             self.window_events.append(window_event)
             try:
                 action_event = self.get_next_action_event(
                     screenshot,
                     window_event,
+                )
+                crud.add_replay_log(
+                    replay_id=self._replay_id,
+                    log_level="INFO",
+                    key="action_event",
+                    data=action_event.to_log_dict(),
                 )
             except StopIteration:
                 break
@@ -94,12 +121,24 @@ class BaseReplayStrategy(ABC):
                     drop_constant=False,
                 )[0]
                 logger.debug(f"action_event=\n{pformat(action_event_dict)}")
+                crud.add_replay_log(
+                    replay_id=self._replay_id,
+                    log_level="INFO",
+                    key="action_event_dict",
+                    data=action_event_dict,
+                )
                 self.action_events.append(action_event)
                 try:
                     playback.play_action_event(
                         action_event,
                         mouse_controller,
                         keyboard_controller,
+                    )
+                    crud.add_replay_log(
+                        replay_id=self._replay_id,
+                        log_level="INFO",
+                        key="playback",
+                        data="success",
                     )
                 except Exception as exc:
                     logger.exception(exc)
@@ -117,8 +156,17 @@ class BaseReplayStrategy(ABC):
             mean_dt = np.mean(dts)
             fps = 1 / mean_dt
             logger.info(f"{fps=:.2f}")
+            crud.add_replay_log(
+                replay_id=self._replay_id, log_level="INFO", key="fps", data=fps
+            )
         if len(self.frame_times) > self.max_frame_times:
             self.frame_times.pop(0)
+            crud.add_replay_log(
+                replay_id=self._replay_id,
+                log_level="INFO",
+                key="frame_times",
+                data=self.frame_times,
+            )
 
 
 def prompt_is_action_complete(

@@ -19,6 +19,7 @@ import time
 from jinja2 import Environment, FileSystemLoader
 from PIL import Image, ImageEnhance
 from posthog import Posthog
+import git
 
 from openadapt.build_utils import is_running_from_executable, redirect_stdout_stderr
 from openadapt.custom_logger import logger
@@ -967,6 +968,19 @@ def retry_with_exceptions(max_retries: int = 5) -> Callable:
         return wrapper_retry
 
     return decorator_retry
+
+
+def get_git_hash() -> str:
+    """Get the Git hash of the current commit."""
+    git_hash = None
+    try:
+        repo = git.Repo(search_parent_directories=True)
+        git_hash = repo.head.commit.hexsha
+    except git.InvalidGitRepositoryError:
+        git_hash = importlib.metadata.version("openadapt")
+    except Exception as exc:
+        logger.warning(f"{exc=}")
+    return git_hash
 
 
 class WrapStdout:
