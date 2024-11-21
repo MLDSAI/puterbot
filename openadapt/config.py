@@ -179,6 +179,15 @@ class Config(BaseSettings):
     # App configurations
     APP_DARK_MODE: bool = False
 
+    # Upload recording configurations
+    RECORDING_UPLOAD_URL: ClassVar[str] = ""
+    OVERWRITE_RECORDING_DESTINATION: bool = False
+    RECORDING_PUBLIC_KEY: str = ""
+    RECORDING_PRIVATE_KEY: str = ""
+    RECORDING_BUCKET_NAME: str = "openadapt"
+    RECORDING_BUCKET_REGION: str = "us-east-1"
+    RECORDING_DELETION_ENABLED: bool = False
+
     # Scrubbing configurations
     SCRUB_ENABLED: bool = False
     SCRUB_CHAR: str = "*"
@@ -299,6 +308,14 @@ class Config(BaseSettings):
         "general": [
             "UNIQUE_USER_ID",
             "REDIRECT_TO_ONBOARDING",
+        ],
+        "recording_upload": [
+            "OVERWRITE_RECORDING_DESTINATION",
+            "RECORDING_PUBLIC_KEY",
+            "RECORDING_PRIVATE_KEY",
+            "RECORDING_BUCKET_NAME",
+            "RECORDING_BUCKET_REGION",
+            "RECORDING_DELETION_ENABLED",
         ],
     }
 

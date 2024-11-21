@@ -918,6 +918,46 @@ def mark_scrubbing_complete(session: SaSession, scrubbed_recording_id: int) -> N
     session.commit()
 
 
+def start_uploading_recording(session: SaSession, recording_id: int) -> None:
+    """Mark a recording as being uploaded."""
+    session.query(Recording).filter(Recording.id == recording_id).update(
+        {"upload_status": Recording.UploadStatus.UPLOADING}
+    )
+    session.commit()
+
+
+def mark_uploading_complete(
+    session: SaSession,
+    recording_id: int,
+    uploaded_key: str,
+    uploaded_to_custom_bucket: bool,
+) -> None:
+    """Mark a recording as being uploaded."""
+    session.query(Recording).filter(Recording.id == recording_id).update(
+        {
+            "upload_status": Recording.UploadStatus.UPLOADED,
+            "uploaded_key": uploaded_key,
+            "uploaded_to_custom_bucket": uploaded_to_custom_bucket,
+        }
+    )
+    session.commit()
+
+
+def delete_uploaded_recording(
+    session: SaSession,
+    recording_id: int,
+) -> None:
+    """Delete an uploaded recording."""
+    session.query(Recording).filter(Recording.id == recording_id).update(
+        {
+            "upload_status": Recording.UploadStatus.NOT_UPLOADED,
+            "uploaded_key": None,
+            "uploaded_to_custom_bucket": False,
+        }
+    )
+    session.commit()
+
+
 def acquire_db_lock(timeout: int = 60) -> bool:
     """Check if the database is locked.
 

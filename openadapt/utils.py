@@ -7,6 +7,7 @@ from functools import wraps
 from io import BytesIO
 from logging import StreamHandler
 from typing import Any, Callable
+from uuid import uuid4
 import ast
 import base64
 import importlib.metadata
@@ -16,10 +17,13 @@ import sys
 import threading
 import time
 
+from botocore.config import Config
 from bs4 import BeautifulSoup
 from jinja2 import Environment, FileSystemLoader
 from PIL import Image, ImageEnhance
 from posthog import Posthog
+import boto3
+import requests
 
 from openadapt.build_utils import is_running_from_executable, redirect_stdout_stderr
 from openadapt.custom_logger import logger
@@ -970,6 +974,53 @@ def retry_with_exceptions(max_retries: int = 5) -> Callable:
     return decorator_retry
 
 
+@retry_with_exceptions()
+def upload_file_to_s3(file_path: str) -> requests.Response:
+    """Upload a file to an S3 bucket.
+
+    Args:
+        file_path (str): The path to the file to upload.
+    """
+    file_name = os.path.basename(file_path)
+    logger.info(f"Uploading {file_name} to S3")
+    key = f"recordings/{config.UNIQUE_USER_ID}/{uuid4()}.zip"
+    if not config.OVERWRITE_RECORDING_DESTINATION:
+        resp = requests.post(
+            config.RECORDING_UPLOAD_URL,
+            json={
+                "key": key,
+                "lambda_function": "get_presigned_url",
+                "client_method": "put_object",
+            },
+        )
+        upload_url = resp.json()["url"]
+    else:
+        # create a presigned url
+        s3 = boto3.client(
+            "s3",
+            config=Config(signature_version="s3v4"),
+            region_name=config.RECORDING_BUCKET_REGION,
+            endpoint_url=f"https://s3.{config.RECORDING_BUCKET_REGION}.amazonaws.com",
+            aws_access_key_id=config.RECORDING_PUBLIC_KEY,
+            aws_secret_access_key=config.RECORDING_PRIVATE_KEY,
+        )
+
+        ONE_HOUR_IN_SECONDS = 3600
+        upload_url = s3.generate_presigned_url(
+            ClientMethod="put_object",
+            Params={
+                "Bucket": config.RECORDING_BUCKET_NAME,
+                "Key": key,
+            },
+            ExpiresIn=ONE_HOUR_IN_SECONDS,
+        )
+
+    with open(file_path, "rb") as file:
+        files = {"file": (file_name, file)}
+        resp = requests.put(upload_url, files=files)
+        return key
+
+
 def truncate_html(html_str: str, max_len: int) -> str:
     """Truncates the given HTML string to a specified maximum length.
 
@@ -1051,6 +1102,62 @@ class WrapStdout:
             except Exception as exc:
                 logger.exception(f"Error running process: {exc}")
                 return
+
+
+def get_recording_url(uploaded_key: str, uploaded_to_custom_bucket: bool) -> str:
+    """Get the URL of a recording."""
+    if uploaded_to_custom_bucket:
+        s3 = boto3.client(
+            "s3",
+            region_name=config.RECORDING_BUCKET_REGION,
+            aws_access_key_id=config.RECORDING_PUBLIC_KEY,
+            aws_secret_access_key=config.RECORDING_PRIVATE_KEY,
+        )
+        return s3.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": config.RECORDING_BUCKET_NAME, "Key": uploaded_key},
+        )
+    else:
+        resp = requests.post(
+            config.RECORDING_UPLOAD_URL,
+            json={
+                "key": uploaded_key,
+                "lambda_function": "get_presigned_url",
+                "client_method": "get_object",
+            },
+        )
+        return resp.json()["url"]
+
+
+def delete_uploaded_recording(
+    recording_id: int, uploaded_key: str, uploaded_to_custom_bucket: bool
+) -> str:
+    """Delete a recording from cloud."""
+
+    def inner() -> None:
+        """Delete a recording from cloud."""
+        if uploaded_to_custom_bucket:
+            s3 = boto3.client(
+                "s3",
+                region_name=config.RECORDING_BUCKET_REGION,
+                aws_access_key_id=config.RECORDING_PUBLIC_KEY,
+                aws_secret_access_key=config.RECORDING_PRIVATE_KEY,
+            )
+            s3.delete_object(Bucket=config.RECORDING_BUCKET_NAME, Key=uploaded_key)
+        else:
+            requests.post(
+                config.RECORDING_UPLOAD_URL,
+                json={
+                    "key": uploaded_key,
+                    "lambda_function": "delete_object",
+                },
+            )
+        from openadapt.db import crud
+
+        with crud.get_new_session(read_and_write=True) as session:
+            crud.delete_uploaded_recording(session, recording_id)
+
+    threading.Thread(target=inner).start()
 
 
 if __name__ == "__main__":

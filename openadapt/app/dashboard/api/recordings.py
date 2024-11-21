@@ -3,14 +3,22 @@
 import json
 
 from fastapi import APIRouter, WebSocket
+from starlette.responses import HTMLResponse, RedirectResponse, Response
 
+from openadapt.config import config
 from openadapt.custom_logger import logger
 from openadapt.db import crud
 from openadapt.deprecated.app import cards
 from openadapt.events import get_events
 from openadapt.models import Recording
 from openadapt.plotting import display_event
-from openadapt.utils import image2utf8, row2dict
+from openadapt.share import upload_recording_to_s3
+from openadapt.utils import (
+    delete_uploaded_recording,
+    get_recording_url,
+    image2utf8,
+    row2dict,
+)
 
 
 class RecordingsAPI:
@@ -29,6 +37,17 @@ class RecordingsAPI:
         self.app.add_api_route("/start", self.start_recording)
         self.app.add_api_route("/stop", self.stop_recording)
         self.app.add_api_route("/status", self.recording_status)
+        self.app.add_api_route(
+            "/cloud/{recording_id}/upload", self.upload_recording, methods=["POST"]
+        )
+        self.app.add_api_route(
+            "/cloud/{recording_id}/view", self.view_recording_on_cloud, methods=["GET"]
+        )
+        self.app.add_api_route(
+            "/cloud/{recording_id}/delete",
+            self.delete_recording_on_cloud,
+            methods=["POST"],
+        )
         self.recording_detail_route()
         return self.app
 
@@ -62,6 +81,37 @@ class RecordingsAPI:
     def recording_status() -> dict[str, bool]:
         """Get the recording status."""
         return {"recording": cards.is_recording()}
+
+    def upload_recording(self, recording_id: int) -> dict[str, str]:
+        """Upload a recording."""
+        with crud.get_new_session(read_and_write=True) as session:
+            crud.start_uploading_recording(session, recording_id)
+        upload_recording_to_s3(config.UNIQUE_USER_ID, recording_id)
+        return {"message": "Recording uploaded"}
+
+    @staticmethod
+    def view_recording_on_cloud(recording_id: int) -> Response:
+        """View a recording from cloud."""
+        session = crud.get_new_session(read_only=True)
+        recording = crud.get_recording_by_id(session, recording_id)
+        if recording.upload_status == Recording.UploadStatus.NOT_UPLOADED:
+            return HTMLResponse(status_code=404)
+        url = get_recording_url(
+            recording.uploaded_key, recording.uploaded_to_custom_bucket
+        )
+        return RedirectResponse(url)
+
+    @staticmethod
+    def delete_recording_on_cloud(recording_id: int) -> dict[str, bool]:
+        """Delete a recording from cloud."""
+        session = crud.get_new_session(read_only=True)
+        recording = crud.get_recording_by_id(session, recording_id)
+        if recording.upload_status == Recording.UploadStatus.NOT_UPLOADED:
+            return {"success": True}
+        delete_uploaded_recording(
+            recording_id, recording.uploaded_key, recording.uploaded_to_custom_bucket
+        )
+        return {"success": True}
 
     def recording_detail_route(self) -> None:
         """Add the recording detail route as a websocket."""
